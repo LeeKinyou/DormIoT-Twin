@@ -1,6 +1,7 @@
 """内存驱动的数据存储层
 
 提供线程安全的波形数据队列和后台采集线程，替代原有的 MQTT/Redis/MySQL 管线。
+采集时同时通过 MQTT 仿真层发布消息，保留物联网协议语义。
 """
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ from collections import deque
 from typing import Any
 
 from dormiot.simulation.synthesizer import WaveformSynthesizer
+from dormiot.protocol.mqtt_simulator import MQTTBroker, MQTTTopic
 
 
 class DataStore:
@@ -138,6 +140,7 @@ class BackgroundCollector:
         self._thread: threading.Thread | None = None
         self._synth = WaveformSynthesizer()
         self._store = DataStore()
+        self._broker = MQTTBroker()
 
     @property
     def is_running(self) -> bool:
@@ -167,11 +170,22 @@ class BackgroundCollector:
             self._thread = None
 
     def _collect_loop(self) -> None:
-        """采集主循环"""
+        """采集主循环 —— 同时发布到 MQTT 仿真 Broker"""
         while self._running.is_set():
             try:
                 tick_data = self._synth.get_next_tick()
                 self._store.push_tick(tick_data)
+
+                # 模拟设备通过 MQTT 上报数据
+                for room_id, data in tick_data.items():
+                    topic = MQTTTopic.METER_REPORT.format(building="5", room=room_id)
+                    self._broker.publish(topic, {
+                        "device_id": f"MOCK_METER_BLDG5_RM{room_id}",
+                        "power": data["power"],
+                        "voltage": data["voltage"],
+                        "smoke_density": data["smoke_density"],
+                        "timestamp": time.time(),
+                    })
             except Exception:
                 pass  # 采集失败不影响后续循环
             time.sleep(self._interval_s)

@@ -249,6 +249,37 @@ class TestBackgroundCollector:
         assert collector.thread.daemon is True
         collector.stop()
 
+    def test_collector_publishes_to_mqtt(self):
+        """测试采集器同时发布消息到 MQTT 仿真 Broker"""
+        from dormiot.data_store import BackgroundCollector, DataStore
+        from dormiot.simulation.synthesizer import WaveformSynthesizer
+        from dormiot.protocol.mqtt_simulator import MQTTBroker
+
+        ds = DataStore()
+        ds.reset()
+        synth = WaveformSynthesizer()
+        synth.reset()
+        MQTTBroker.reset()
+
+        received_topics = []
+
+        def on_message(topic, payload):
+            received_topics.append(topic)
+
+        broker = MQTTBroker()
+        broker.subscribe("dormiot/campus/5/#", on_message)
+
+        collector = BackgroundCollector(interval_s=0.1)
+        collector.start()
+        time.sleep(0.35)
+        collector.stop()
+
+        # 应该收到至少 6 个房间的消息
+        assert len(received_topics) >= 6
+        # Topic 格式应正确
+        assert any("dormiot/campus/5/101/meter" in t for t in received_topics)
+        assert any("dormiot/campus/5/106/meter" in t for t in received_topics)
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
