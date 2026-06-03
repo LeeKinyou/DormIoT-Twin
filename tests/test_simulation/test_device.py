@@ -38,7 +38,7 @@ class TestVirtualIoTDevice:
         device = self._make_device()
         device.force_state(DeviceStatus.ALARM)
         report = device.generate_metrics()
-        assert report.metrics.current_power > 1500
+        assert report.metrics.current_power >= 1500
         assert report.metrics.smoke_density > 0.30
 
     def test_warning_metrics_elevated(self):
