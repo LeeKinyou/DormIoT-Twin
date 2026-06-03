@@ -12,6 +12,8 @@ class DeviceStatus(str, Enum):
     NORMAL = "NORMAL"
     WARNING = "WARNING"
     ALARM = "ALARM"
+    ALARM_RESISTOR = "ALARM_RESISTOR"    # 热得快/吹风机
+    ALARM_MICROWAVE = "ALARM_MICROWAVE"  # 微波炉
 
 
 class MetricsSnapshot(BaseModel):

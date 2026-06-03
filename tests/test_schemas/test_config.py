@@ -4,41 +4,26 @@ from dormiot.config import Settings
 class TestSettings:
     def test_field_types(self):
         s = Settings()
-        assert isinstance(s.mqtt_broker_port, int)
-        assert isinstance(s.redis_port, int)
-        assert isinstance(s.mysql_port, int)
         assert isinstance(s.simulation_node_count, int)
+        assert isinstance(s.simulation_report_interval_ms, int)
         assert isinstance(s.power_threshold_illegal, float)
         assert isinstance(s.smoke_threshold_critical, float)
+        assert isinstance(s.openai_api_key, str)
+        assert isinstance(s.openai_base_url, str)
+        assert isinstance(s.openai_model, str)
 
-    def test_mysql_url_format(self):
+    def test_default_values(self):
         s = Settings()
-        assert s.mysql_url.startswith("mysql+pymysql://")
-        assert f":{s.mysql_port}/" in s.mysql_url
-        assert s.mysql_database in s.mysql_url
-
-    def test_redis_url_format(self):
-        s = Settings()
-        assert s.redis_url.startswith("redis://")
-        assert f":{s.redis_port}/" in s.redis_url
+        assert s.simulation_node_count == 6
+        # openai_base_url 和 openai_model 可能被 .env 覆盖，只验证类型
+        assert isinstance(s.openai_base_url, str)
+        assert len(s.openai_base_url) > 0
+        assert isinstance(s.openai_model, str)
+        assert len(s.openai_model) > 0
 
     def test_env_override(self, monkeypatch):
-        monkeypatch.setenv("DORMIOT_MQTT_BROKER_HOST", "192.168.1.100")
         monkeypatch.setenv("DORMIOT_SIMULATION_NODE_COUNT", "100")
+        monkeypatch.setenv("DORMIOT_OPENAI_MODEL", "gpt-4o")
         s = Settings()
-        assert s.mqtt_broker_host == "192.168.1.100"
         assert s.simulation_node_count == 100
-
-    def test_mysql_url_encoding(self, monkeypatch):
-        monkeypatch.setenv("DORMIOT_MYSQL_PASSWORD", "p@ss:word/123")
-        monkeypatch.setenv("DORMIOT_MYSQL_USER", "test@user")
-        s = Settings()
-        assert "%40" in s.mysql_url
-        assert "%3A" in s.mysql_url
-        assert "%2F" in s.mysql_url
-
-    def test_redis_url_with_password(self, monkeypatch):
-        monkeypatch.setenv("DORMIOT_REDIS_PASSWORD", "r@edis:pwd")
-        s = Settings()
-        assert "%40" in s.redis_url
-        assert "%3A" in s.redis_url
+        assert s.openai_model == "gpt-4o"
