@@ -1,23 +1,21 @@
-# DormIoT-Twin — 宿舍物联网安全监控数字孪生系统
+# DormIoT-Twin — 宿舍安全监控数字孪生系统
 
-基于数字孪生技术的宿舍安全监控系统，通过虚拟仿真设备模拟真实电表数据，实时监测功率异常和烟雾浓度，自动触发告警并可视化展示。
+基于数字孪生技术的宿舍安全监控系统，通过物理波形合成引擎模拟真实电表数据，MQTT 协议仿真层保留物联网架构语义，AI Agent 智能研判异常，政企科技大屏实时可视化。
 
 ## 技术栈
 
 - **Python 3.12+** + **uv** 包管理
 - **Streamlit** 全栈 Web 框架
-- **paho-mqtt** MQTT 通信
-- **Redis** 设备状态缓存
-- **MySQL** 告警持久化
+- **Plotly** 数据可视化
+- **NumPy** 物理波形合成
+- **LangChain + OpenAI** AI 研判
 - **Pydantic v2** 数据校验
-- **ECharts** 数据可视化
 
-## 快速启动（三步部署）
+## 快速启动
 
 ### 前置条件
 
 - Python 3.12+
-- Docker & Docker Compose
 - uv（`pip install uv`）
 
 ### 第一步：安装依赖
@@ -26,20 +24,15 @@
 uv sync
 ```
 
-### 第二步：启动基础设施
+### 第二步：配置 AI（可选）
 
-```bash
-docker compose up -d
+复制 `.env.example` 为 `.env`，填入 OpenAI 兼容 API 配置：
+
 ```
-
-启动 EMQX（MQTT Broker）、Redis、MySQL 三个服务。
-
-验证服务状态：
-```bash
-docker compose ps
+DORMIOT_OPENAI_API_KEY=sk-xxx
+DORMIOT_OPENAI_BASE_URL=https://api.openai.com/v1
+DORMIOT_OPENAI_MODEL=gpt-4o-mini
 ```
-
-三个服务应显示 `healthy` 状态。
 
 ### 第三步：启动应用
 
@@ -51,143 +44,105 @@ uv run streamlit run app.py
 
 ## 功能说明
 
-### 实时监控（Tab 1）
+### 政企科技大屏
 
-- **概览仪表盘**：在线设备数、正常/预警/告警设备数、全校总功率
-- **全校功率趋势图**：实时折线图，含 800W（恶性负载）和 1500W（违章电器）阈值线
-- **设备状态饼图**：正常/预警/告警设备分布
-- **楼层平面图**：SVG 渲染，颜色映射（绿=正常/黄=预警/红=告警/灰=离线），点击房间查看详情
-- **房间详情面板**：单房间指标 + 功率走势折线图
+- **顶部状态栏**：系统名称、实时总功率、告警/预警房间数、运行时长
+- **房间网格（2×3）**：6 个宿舍卡片，显示功率/电压/烟雾浓度/迷你趋势线
+- **实时波形图**：Plotly 绘制，带 800W 预警线和 1500W 告警线，渐变填充
+- **MQTT 通信日志**：展示模拟的设备上报消息流
 
-数据每 2 秒自动刷新。
+### AI Agent 工作台
 
-### 告警记录（Tab 2）
+- **感知层**：实时监控 6 个房间，1Hz 采样
+- **推理层**：波形分类（尖峰/方波/持续高频）→ LLM 智能研判
+- **研判输出**：自动触发（功率飙升检测）或手动触发（演示模式）
+- **历史记录**：最近 20 条研判结果
 
-- 表格展示告警列表
-- 支持按级别（CRITICAL/HIGH/MEDIUM）、楼栋、处理状态筛选
-- 可标记告警为已处理
+### 异常注入（侧边栏）
 
-### 仿真控制（Tab 3）
-
-- 启停仿真集群
-- 手动发送一轮数据
-- 向指定设备注入异常状态（WARNING/ALARM）
-- 重置所有设备为 NORMAL
-- 查看所有设备状态一览
+- 🔥 热得快：瞬间叠加 1800W + 高频毛刺
+- 📻 微波炉：方波交替 +1200W / +30W
+- 支持清除单个房间或重置所有
 
 ## 项目结构
 
 ```
 DormIoT-Twin/
-├── app.py                          # Streamlit 主应用入口
-├── docker-compose.yml              # 基础设施编排（EMQX/Redis/MySQL）
+├── app.py                          # Streamlit 主应用（政企科技大屏）
 ├── pyproject.toml                  # 项目配置与依赖
+├── .env.example                    # 环境变量模板
+│
 ├── src/
 │   └── dormiot/
-│       ├── config.py               # Pydantic Settings 配置管理
-│       ├── schemas/
-│       │   ├── device.py           # MeterReport / MetricsSnapshot 数据契约
-│       │   └── alert.py            # AlertEvent 告警事件模型
-│       ├── simulation/
-│       │   ├── noise.py            # 高斯噪声生成
-│       │   ├── state_machine.py    # 设备状态机
-│       │   ├── device.py           # VirtualIoTDevice 虚拟设备
-│       │   ├── cluster.py          # SimulationCluster 集群编排
-│       │   └── publisher.py        # MQTTPublisher 发布客户端
-│       ├── gateway/
-│       │   ├── mqtt_handler.py     # MQTT 后台监听器
-│       │   ├── rule_engine.py      # 规则引擎（异常检测）
-│       │   └── pipeline.py         # 数据管线串联
-│       ├── storage/
-│       │   ├── redis_cache.py      # Redis 缓存封装
-│       │   ├── models.py           # SQLAlchemy ORM 模型
-│       │   └── repository.py       # 告警 CRUD
-│       └── ui/
-│           ├── floor_plan.py       # SVG 楼层平面图
-│           └── charts.py           # ECharts 图表配置
-└── tests/
-    ├── test_schemas/               # Schema 单元测试
-    ├── test_simulation/            # 仿真层单元测试
-    ├── test_gateway/               # 网关层测试（规则引擎 + MQTT 集成）
-    └── test_storage/               # 存储层集成测试
+│       ├── config.py               # Pydantic Settings 配置
+│       ├── data_store.py           # 内存数据存储 + 后台采集线程
+│       ├── ai_diagnoser.py         # AI 波形诊断器（LangChain）
+│       │
+│       ├── protocol/               # ── MQTT 协议仿真层 ──
+│       │   └── mqtt_simulator.py   # 内存 pub/sub Broker
+│       │
+│       ├── simulation/             # ── 感知层：波形合成 ──
+│       │   └── synthesizer.py      # 物理波形合成引擎
+│       │
+│       ├── schemas/                # ── Pydantic 数据契约 ──
+│       │   └── device.py           # MeterReport / DeviceStatus
+│       │
+│       └── ui/                     # ── UI 辅助函数 ──
+│           └── helpers.py          # 颜色/图表/网格数据
+│
+└── tests/                          # 单元测试（179 个）
+    ├── test_protocol/              # MQTT 仿真层测试
+    ├── test_simulation/            # 波形合成测试
+    ├── test_data_store.py          # 数据存储测试
+    ├── test_ai_diagnoser.py        # AI 诊断测试
+    └── test_ui_helpers.py          # UI 辅助函数测试
 ```
 
 ## 运行测试
 
 ```bash
-# 运行所有单元测试（无需外部服务）
+# 运行所有测试
 uv run pytest tests/ -v
 
-# 仅运行规则引擎测试
-uv run pytest tests/test_gateway/test_rule_engine.py -v
-
-# 运行集成测试（需要 docker compose up -d）
-uv run pytest tests/test_gateway/test_mqtt.py -v
-uv run pytest tests/test_storage/ -v
+# 带覆盖率
+uv run pytest --cov=dormiot --cov-report=term-missing
 ```
 
 ## 配置说明
 
-通过环境变量或 `.env` 文件配置（前缀 `DORMIOT_`）。密码中的特殊字符（如 `@` `:` `/`）会自动 URL 编码，直接填写原始密码即可。
+通过环境变量或 `.env` 文件配置（前缀 `DORMIOT_`）：
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `DORMIOT_MQTT_BROKER_HOST` | localhost | MQTT Broker 地址 |
-| `DORMIOT_MQTT_BROKER_PORT` | 1883 | MQTT Broker 端口 |
-| `DORMIOT_REDIS_HOST` | localhost | Redis 主机 |
-| `DORMIOT_REDIS_PORT` | 6379 | Redis 端口 |
-| `DORMIOT_REDIS_DB` | 0 | Redis 数据库编号 |
-| `DORMIOT_REDIS_PASSWORD` | | Redis 密码（可选） |
-| `DORMIOT_REDIS_USERNAME` | | Redis 用户名（可选） |
-| `DORMIOT_MYSQL_HOST` | localhost | MySQL 主机 |
-| `DORMIOT_MYSQL_PORT` | 3306 | MySQL 端口 |
-| `DORMIOT_MYSQL_USER` | root | MySQL 用户名 |
-| `DORMIOT_MYSQL_PASSWORD` | password | MySQL 密码 |
-| `DORMIOT_MYSQL_DATABASE` | dormiot | MySQL 数据库名 |
+| `DORMIOT_OPENAI_API_KEY` | (空) | OpenAI 兼容 API Key |
+| `DORMIOT_OPENAI_BASE_URL` | `https://api.openai.com/v1` | API 基础 URL |
+| `DORMIOT_OPENAI_MODEL` | `gpt-4o-mini` | 模型名称 |
 | `DORMIOT_POWER_THRESHOLD_ILLEGAL` | 1500.0 | 违章电器功率阈值 (W) |
 | `DORMIOT_POWER_THRESHOLD_OVERLOAD` | 800.0 | 恶性负载功率阈值 (W) |
-| `DORMIOT_SMOKE_THRESHOLD_CRITICAL` | 0.40 | 火灾烟雾浓度阈值 (ppm) |
 
-## Systemd 服务配置（生产部署）
+## 架构设计
 
-创建 `/etc/systemd/system/dormiot.service`：
-
-```ini
-[Unit]
-Description=DormIoT-Twin Streamlit App
-After=network.target docker.service
-Requires=docker.service
-
-[Service]
-Type=simple
-User=deploy
-WorkingDirectory=/opt/DormIoT-Twin
-ExecStartPre=/usr/bin/docker compose up -d
-ExecStart=/opt/DormIoT-Twin/.venv/bin/streamlit run app.py --server.port 8501 --server.headless true
-Restart=always
-RestartSec=5
-Environment="PATH=/opt/DormIoT-Twin/.venv/bin:/usr/bin"
-
-[Install]
-WantedBy=multi-user.target
 ```
-
-启用并启动：
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable dormiot
-sudo systemctl start dormiot
+┌──────────────────────────────────────────────────────┐
+│            感知层：物理波形合成引擎                      │
+│   WaveformSynthesizer (NumPy) → 6 个宿舍虚拟电表       │
+│   NORMAL / ALARM_RESISTOR / ALARM_MICROWAVE           │
+└────────────────────┬─────────────────────────────────┘
+                     │ get_next_tick()
+                     ▼
+┌──────────────────────────────────────────────────────┐
+│            网络层：MQTT 协议仿真层                      │
+│   MQTTBroker (内存 pub/sub) → Topic 路由               │
+│   dormiot/campus/5/{room}/meter                       │
+└────────────────────┬─────────────────────────────────┘
+                     │ subscribe / publish
+                     ▼
+┌──────────────────────────────────────────────────────┐
+│            应用层：AI Agent + 大屏                      │
+│   DataStore (deque) → 功率飙升检测 → AIDiagnoser       │
+│   Streamlit 政企科技大屏（科技绿主题）                   │
+└──────────────────────────────────────────────────────┘
 ```
-
-## 告警规则
-
-| 规则 | 条件 | 级别 | 说明 |
-|------|------|------|------|
-| 违章电器 | 功率 > 1500W | HIGH | 检测大功率违规电器 |
-| 恶性负载 | 功率 > 800W | MEDIUM | 负载超过安全阈值 |
-| 火灾特级 | 烟雾 > 0.40ppm | CRITICAL | 疑似火灾 |
-
-同设备同类告警有 60 秒冷却时间，避免重复触发。
 
 ## License
 
