@@ -23,7 +23,7 @@ class DataStore:
 
     _instance: DataStore | None = None
     _lock = threading.Lock()
-    MAX_HISTORY = 60  # 最多保留 60 秒
+    MAX_HISTORY = 300  # 最多保留 300 秒（5分钟）
 
     def __new__(cls) -> DataStore:
         with cls._lock:
@@ -125,6 +125,54 @@ class DataStore:
             old_power = min(recent[:-1])  # 窗口内的最低功率
             new_power = recent[-1]        # 最新功率
             return (new_power - old_power) > threshold
+
+    def get_floor_snapshot(self, floor: int) -> dict[str, dict[str, Any]]:
+        """获取指定楼层的所有房间数据
+
+        Args:
+            floor: 楼层号（1-6）
+
+        Returns:
+            该楼层所有房间的最新数据
+        """
+        with self._data_lock:
+            if not self._history:
+                return {}
+            latest = self._history[-1]
+            return {
+                room_id: data
+                for room_id, data in latest.items()
+                if room_id.startswith(str(floor))
+            }
+
+    def get_building_summary(self) -> dict[str, Any]:
+        """获取整栋楼的汇总数据
+
+        Returns:
+            包含 total_rooms, alarm_count, warning_count, total_power, avg_power 的字典
+        """
+        with self._data_lock:
+            if not self._history:
+                return {
+                    "total_rooms": 0,
+                    "alarm_count": 0,
+                    "warning_count": 0,
+                    "total_power": 0.0,
+                    "avg_power": 0.0,
+                }
+
+            latest = self._history[-1]
+            total_power = sum(d.get("power", 0) for d in latest.values())
+            alarm_count = sum(1 for d in latest.values() if d.get("power", 0) > 1500)
+            warning_count = sum(1 for d in latest.values() if 800 < d.get("power", 0) <= 1500)
+
+            return {
+                "total_rooms": len(latest),
+                "alarm_count": alarm_count,
+                "warning_count": warning_count,
+                "total_power": total_power,
+                "avg_power": total_power / len(latest) if latest else 0,
+            }
 
 
 class BackgroundCollector:

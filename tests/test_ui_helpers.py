@@ -28,8 +28,10 @@ from dormiot.ui.helpers import (
     get_status_text,
     build_room_grid_data,
     build_power_chart,
+    build_floor_plan_chart,
     build_alarm_log_entry,
     format_mqtt_log_entry,
+    extract_waveform_features,
 )
 
 
@@ -262,3 +264,141 @@ class TestMQTTLogEntry:
         """告警消息带 ⚠ 图标"""
         result = format_mqtt_log_entry("dormiot/campus/5/102/meter", {"power": 1800.0})
         assert "⚠" in result
+
+
+# ── build_floor_plan_chart ──
+
+
+class TestFloorPlanChart:
+    """宿舍平面图测试"""
+
+    def test_returns_figure(self):
+        """应返回 Plotly Figure"""
+        rooms = build_room_grid_data({})
+        fig = build_floor_plan_chart(rooms)
+        assert isinstance(fig, go.Figure)
+
+    def test_has_six_room_shapes(self):
+        """应有 6 个房间矩形"""
+        rooms = build_room_grid_data({})
+        fig = build_floor_plan_chart(rooms)
+        # Plotly shapes 包含房间矩形
+        rect_shapes = [s for s in fig.layout.shapes if s.type == "rect"]
+        assert len(rect_shapes) == 6
+
+    def test_has_room_number_annotations(self):
+        """应有房间号标注"""
+        rooms = build_room_grid_data({})
+        fig = build_floor_plan_chart(rooms)
+        # 检查是否有包含房间号的标注
+        annotation_texts = [a.text for a in fig.layout.annotations]
+        for room_id in ["101", "102", "103", "104", "105", "106"]:
+            assert any(room_id in text for text in annotation_texts), f"缺少房间 {room_id} 标注"
+
+    def test_has_power_annotations(self):
+        """应有功率数值标注"""
+        rooms = build_room_grid_data({"101": {"power": 500.0, "voltage": 220.0, "smoke_density": 0.01}})
+        fig = build_floor_plan_chart(rooms)
+        annotation_texts = [a.text for a in fig.layout.annotations]
+        assert any("500" in text for text in annotation_texts), "应显示功率数值"
+
+    def test_alarm_room_red_color(self):
+        """告警房间应使用红色"""
+        rooms = build_room_grid_data({"101": {"power": 1800.0, "voltage": 220.0, "smoke_density": 0.01}})
+        fig = build_floor_plan_chart(rooms)
+        # 找到房间 101 的矩形（第一个）
+        rect_shapes = [s for s in fig.layout.shapes if s.type == "rect"]
+        assert rect_shapes[0].fillcolor == COLOR_ALARM
+
+    def test_normal_room_green_color(self):
+        """正常房间应使用绿色"""
+        rooms = build_room_grid_data({"101": {"power": 50.0, "voltage": 220.0, "smoke_density": 0.01}})
+        fig = build_floor_plan_chart(rooms)
+        rect_shapes = [s for s in fig.layout.shapes if s.type == "rect"]
+        assert rect_shapes[0].fillcolor == COLOR_PRIMARY
+
+    def test_warning_room_amber_color(self):
+        """预警房间应使用琥珀黄"""
+        rooms = build_room_grid_data({"102": {"power": 1000.0, "voltage": 220.0, "smoke_density": 0.01}})
+        fig = build_floor_plan_chart(rooms)
+        rect_shapes = [s for s in fig.layout.shapes if s.type == "rect"]
+        # 房间 102 是第二个
+        assert rect_shapes[1].fillcolor == COLOR_WARNING
+
+    def test_transparent_background(self):
+        """背景应透明"""
+        rooms = build_room_grid_data({})
+        fig = build_floor_plan_chart(rooms)
+        assert fig.layout.paper_bgcolor == "rgba(0,0,0,0)"
+        assert fig.layout.plot_bgcolor == "rgba(0,0,0,0)"
+
+
+# ── extract_waveform_features ──
+
+
+class TestWaveformFeatures:
+    """波形特征提取测试"""
+
+    def test_returns_dict(self):
+        """应返回字典"""
+        import numpy as np
+        data = np.array([50.0, 52.0, 48.0, 51.0, 49.0])
+        features = extract_waveform_features(data)
+        assert isinstance(features, dict)
+
+    def test_has_mean(self):
+        """应包含均值"""
+        import numpy as np
+        data = np.array([100.0, 200.0, 300.0])
+        features = extract_waveform_features(data)
+        assert "mean" in features
+        assert features["mean"] == pytest.approx(200.0)
+
+    def test_has_std(self):
+        """应包含标准差"""
+        import numpy as np
+        data = np.array([100.0, 200.0, 300.0])
+        features = extract_waveform_features(data)
+        assert "std" in features
+        assert features["std"] > 0
+
+    def test_has_max(self):
+        """应包含最大值"""
+        import numpy as np
+        data = np.array([50.0, 1800.0, 100.0])
+        features = extract_waveform_features(data)
+        assert "max" in features
+        assert features["max"] == 1800.0
+
+    def test_has_min(self):
+        """应包含最小值"""
+        import numpy as np
+        data = np.array([50.0, 1800.0, 100.0])
+        features = extract_waveform_features(data)
+        assert "min" in features
+        assert features["min"] == 50.0
+
+    def test_has_ptp(self):
+        """应包含峰峰值"""
+        import numpy as np
+        data = np.array([50.0, 1800.0, 100.0])
+        features = extract_waveform_features(data)
+        assert "ptp" in features
+        assert features["ptp"] == 1750.0
+
+    def test_has_count(self):
+        """应包含采样点数"""
+        import numpy as np
+        data = np.array([50.0, 52.0, 48.0])
+        features = extract_waveform_features(data)
+        assert "count" in features
+        assert features["count"] == 3
+
+    def test_empty_array(self):
+        """空数组应返回默认值"""
+        import numpy as np
+        data = np.array([])
+        features = extract_waveform_features(data)
+        assert features["mean"] == 0.0
+        assert features["std"] == 0.0
+        assert features["count"] == 0

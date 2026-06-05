@@ -12,12 +12,14 @@ import threading
 import numpy as np
 
 from dormiot.schemas.device import DeviceStatus
+from dormiot.config import settings
 
 
 class WaveformSynthesizer:
     """物理波形合成器（线程安全单例）
 
-    每次调用 get_next_tick() 返回所有宿舍（101-106）当前时刻的波形数据点。
+    每次调用 get_next_tick() 返回所有宿舍当前时刻的波形数据点。
+    支持多楼层、多房间配置。
     内部维护一个全局时钟（tick_count），用于合成昼夜节律和方波周期。
     """
 
@@ -25,7 +27,6 @@ class WaveformSynthesizer:
     _lock = threading.Lock()
 
     # ── 物理参数 ──
-    ROOMS = ["101", "102", "103", "104", "105", "106"]
     BASE_POWER = 50.0        # 基准功率 (W)
     BASE_VOLTAGE = 220.0     # 基准电压 (V)
     BASE_SMOKE = 0.01        # 基准烟雾浓度 (ppm)
@@ -63,6 +64,26 @@ class WaveformSynthesizer:
         self._alarm_modes: dict[str, DeviceStatus] = {}
         self._rng = np.random.default_rng()
         self._room_lock = threading.Lock()
+
+        # 生成所有房间 ID：楼层号 + 房间号（如 101, 102, ..., 620）
+        self.ROOMS = []
+        for floor in range(1, settings.building_floors + 1):
+            for room in range(1, settings.rooms_per_floor + 1):
+                self.ROOMS.append(f"{floor}{room:02d}")
+
+    @property
+    def floors(self) -> list[int]:
+        """返回楼层列表"""
+        return list(range(1, settings.building_floors + 1))
+
+    @property
+    def rooms_per_floor(self) -> int:
+        """返回每层房间数"""
+        return settings.rooms_per_floor
+
+    def get_rooms_on_floor(self, floor: int) -> list[str]:
+        """获取指定楼层的所有房间 ID"""
+        return [r for r in self.ROOMS if r.startswith(str(floor))]
 
     @property
     def tick_count(self) -> int:

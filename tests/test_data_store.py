@@ -53,15 +53,15 @@ class TestDataStore:
             ds.push_tick({"101": {"power": 50.0 + i, "voltage": 220.0, "smoke_density": 0.01, "status": "NORMAL"}})
         assert ds.history_length == 10
 
-    def test_max_history_60_seconds(self):
-        """测试历史记录最多保留 60 秒（60 个 tick）"""
+    def test_max_history_300_seconds(self):
+        """测试历史记录最多保留 300 秒（300 个 tick）"""
         from dormiot.data_store import DataStore
         ds = DataStore()
         ds.reset()
 
-        for i in range(70):
+        for i in range(310):
             ds.push_tick({"101": {"power": 50.0, "voltage": 220.0, "smoke_density": 0.01, "status": "NORMAL"}})
-        assert ds.history_length == 60
+        assert ds.history_length == 300
 
     def test_latest_snapshot(self):
         """测试 latest_snapshot 返回最新数据"""

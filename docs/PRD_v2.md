@@ -604,7 +604,369 @@ LLM (DeepSeek-V4-Flash): "疑似热得快启动..."
 
 ---
 
-## 九、验收标准
+## 九、演示优化方案
+
+> 从答辩角度出发，让老师眼前一亮的改进方案
+
+### 9.1 已有亮点
+
+| 亮点 | 说明 |
+|------|------|
+| **科技绿主题** | 5 层色彩体系完整，视觉统一 |
+| **物理波形合成** | 非随机数，有昼夜节律、高频毛刺、方波交替等真实特征 |
+| **AI Agent 研判** | LangChain + OpenAI 集成，推理链路完整 |
+| **MQTT 仿真层** | 保留协议语义，支持通配符匹配 |
+| **实时数据刷新** | `@st.fragment(run_every="1s")` 局部刷新 |
+
+### 9.2 待优化方向
+
+| 问题 | 影响 | 解决方案 |
+|------|------|---------|
+| 缺少"数字孪生"的直观感受 | 只有数据表格，没有空间感 | 添加宿舍平面图 |
+| AI 研判展示比较朴素 | 推理过程不直观 | AI 推理过程可视化 |
+| 缺少演示场景编排 | 需要手动操作，不够流畅 | 一键演示场景 |
+| 没有历史数据分析 | 只有实时 60 秒，缺少趋势 | 历史趋势分析 |
+| 告警视觉冲击力不够 | 只是文字变色，不够震撼 | 告警视觉增强 |
+
+### 9.3 方案一：宿舍平面图（强烈推荐）
+
+**效果**：让老师直观看到"数字孪生"的空间感
+
+**实现思路**：
+- 用 Plotly 绘制 2D 宿舍平面图
+- 每个房间用颜色块表示状态（绿/黄/红）
+- 鼠标悬停显示详细信息
+- 点击房间跳转到详细波形
+
+**代码实现**（添加到 `app.py`）：
+
+```python
+def render_floor_plan(rooms_data: list[dict]) -> None:
+    """渲染宿舍楼平面图"""
+    import plotly.graph_objects as go
+
+    # 房间布局坐标（2行3列）
+    room_positions = {
+        "101": (0, 1), "102": (1, 1), "103": (2, 1),
+        "104": (0, 0), "105": (1, 0), "106": (2, 0),
+    }
+
+    fig = go.Figure()
+
+    for room in rooms_data:
+        rid = room["id"]
+        x, y = room_positions[rid]
+        color = room["color"]
+
+        # 绘制房间方块
+        fig.add_shape(
+            type="rect",
+            x0=x, y0=y, x1=x+0.9, y1=y+0.9,
+            fillcolor=color,
+            opacity=0.7,
+            line=dict(color=color, width=2),
+        )
+
+        # 添加房间号和功率文字
+        fig.add_annotation(
+            x=x+0.45, y=y+0.6,
+            text=f"<b>{rid}</b>",
+            showarrow=False,
+            font=dict(size=16, color="white"),
+        )
+        fig.add_annotation(
+            x=x+0.45, y=y+0.3,
+            text=f"{room['power']:.0f}W",
+            showarrow=False,
+            font=dict(size=12, color="white"),
+        )
+
+    fig.update_layout(
+        title="宿舍楼平面图（实时状态）",
+        xaxis=dict(visible=False, range=[-0.1, 3]),
+        yaxis=dict(visible=False, range=[-0.1, 2]),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        height=250,
+        margin=dict(l=20, r=20, t=40, b=20),
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+```
+
+### 9.4 方案二：AI 推理过程可视化（强烈推荐）
+
+**效果**：让老师看到 AI 不是黑盒，有清晰的推理链路
+
+**实现思路**：
+- 用流程图展示：波形数据 → 特征提取 → 分类 → LLM 研判
+- 每一步用不同颜色标注
+- 添加置信度指标
+
+**代码实现**：
+
+```python
+def render_ai_reasoning(waveform_type: str, power_array: list, diagnosis: str) -> None:
+    """渲染 AI 推理过程可视化"""
+    import numpy as np
+
+    # 提取特征
+    arr = np.array(power_array)
+    features = {
+        "均值": f"{np.mean(arr):.1f}W",
+        "标准差": f"{np.std(arr):.1f}",
+        "最大值": f"{np.max(arr):.1f}W",
+        "峰峰值": f"{np.ptp(arr):.1f}W",
+    }
+
+    # 推理流程图
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.markdown("#### 📊 感知层")
+        st.code(f"采样 {len(power_array)} 点")
+        for k, v in features.items():
+            st.caption(f"{k}: {v}")
+
+    with col2:
+        st.markdown("#### 🔍 特征提取")
+        if waveform_type == "尖峰":
+            st.error(f"**{waveform_type}**")
+            st.caption("标准差 > 40，存在突变")
+        elif waveform_type == "方波":
+            st.warning(f"**{waveform_type}**")
+            st.caption("高低交替，周期性明显")
+        elif waveform_type == "持续高频":
+            st.warning(f"**{waveform_type}**")
+            st.caption("均值持续偏高")
+        else:
+            st.success(f"**{waveform_type}**")
+            st.caption("波动正常范围")
+
+    with col3:
+        st.markdown("#### 🤖 LLM 推理")
+        st.info("LangChain + OpenAI")
+        st.caption("专业安防 Prompt")
+
+    with col4:
+        st.markdown("#### 📋 研判输出")
+        st.markdown(diagnosis[:100] + "..." if len(diagnosis) > 100 else diagnosis)
+```
+
+### 9.5 方案三：一键演示场景（强烈推荐）
+
+**效果**：点击按钮自动演示完整流程，不需要手动操作
+
+**实现思路**：
+- 添加"演示模式"按钮
+- 自动执行：正常运行 → 注入异常 → AI 检测 → 研判输出 → 恢复正常
+- 每一步有动画过渡
+
+**代码实现**（添加到侧边栏）：
+
+```python
+def run_demo_scenario():
+    """运行完整演示场景"""
+    import time
+
+    demo_steps = [
+        {"action": "normal", "duration": 3, "message": "▶ 正常运行中..."},
+        {"action": "inject_resistor", "duration": 2, "message": "🔥 检测到热得快！"},
+        {"action": "wait_detection", "duration": 3, "message": "⚡ 功率飙升检测中..."},
+        {"action": "ai_diagnosis", "duration": 2, "message": "🤖 AI 研判中..."},
+        {"action": "show_result", "duration": 5, "message": "📋 研判完成"},
+        {"action": "clear", "duration": 2, "message": "✅ 恢复正常"},
+    ]
+
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    for i, step in enumerate(demo_steps):
+        progress = int((i + 1) / len(demo_steps) * 100)
+        progress_bar.progress(progress)
+        status_text.info(step["message"])
+
+        if step["action"] == "inject_resistor":
+            synth.set_alarm_mode("101", DeviceStatus.ALARM_RESISTOR)
+        elif step["action"] == "ai_diagnosis":
+            trigger_ai_diagnosis("101")
+        elif step["action"] == "clear":
+            synth.clear_alarm_mode("101")
+
+        time.sleep(step["duration"])
+
+    status_text.success("✅ 演示完成！")
+    time.sleep(1)
+    status_text.empty()
+    progress_bar.empty()
+```
+
+### 9.6 方案四：历史趋势分析（推荐）
+
+**效果**：展示系统不只是实时监控，还有数据分析能力
+
+**实现思路**：
+- 添加时间范围选择器（最近 5 分钟 / 30 分钟 / 1 小时）
+- 展示每个房间的历史功率曲线
+- 添加统计指标（平均值、峰值、异常次数）
+
+### 9.7 方案五：告警视觉增强（推荐）
+
+**效果**：告警时有更强的视觉冲击力
+
+**CSS 动画**（添加到 `app.py`）：
+
+```css
+/* 告警闪烁动画 */
+@keyframes alarm_pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.alarm-active {
+    animation: alarm_pulse 1s infinite;
+    border: 2px solid #e74c3c !important;
+    box-shadow: 0 0 20px rgba(231, 76, 60, 0.5);
+}
+
+/* 预警呼吸效果 */
+@keyframes warning_breathe {
+    0% { box-shadow: 0 0 5px rgba(243, 156, 18, 0.3); }
+    50% { box-shadow: 0 0 15px rgba(243, 156, 18, 0.6); }
+    100% { box-shadow: 0 0 5px rgba(243, 156, 18, 0.3); }
+}
+
+.warning-active {
+    animation: warning_breathe 2s infinite;
+}
+```
+
+### 9.8 方案六：系统架构图（推荐）
+
+**效果**：让老师理解你的技术架构
+
+**代码实现**：
+
+```python
+def render_architecture_diagram():
+    """渲染系统架构图"""
+    import plotly.graph_objects as go
+
+    fig = go.Figure()
+
+    # 三层架构
+    layers = [
+        {"name": "应用层", "y": 2, "color": "#238E54", "components": ["Streamlit 大屏", "AI Agent", "数据可视化"]},
+        {"name": "网络层", "y": 1, "color": "#2ca86a", "components": ["MQTT Broker", "Topic 路由", "消息队列"]},
+        {"name": "感知层", "y": 0, "color": "#34c77b", "components": ["波形合成", "数据采集", "状态监测"]},
+    ]
+
+    for layer in layers:
+        fig.add_shape(
+            type="rect",
+            x0=0, y0=layer["y"]-0.4, x1=6, y1=layer["y"]+0.4,
+            fillcolor=layer["color"],
+            opacity=0.2,
+            line=dict(color=layer["color"], width=1),
+        )
+        fig.add_annotation(
+            x=0.5, y=layer["y"],
+            text=f"<b>{layer['name']}</b>",
+            showarrow=False,
+            font=dict(size=14, color="white"),
+        )
+        for i, comp in enumerate(layer["components"]):
+            fig.add_shape(
+                type="rect",
+                x0=2+i*1.5, y0=layer["y"]-0.25, x1=2+i*1.5+1.2, y1=layer["y"]+0.25,
+                fillcolor=layer["color"],
+                opacity=0.6,
+                line=dict(color=layer["color"], width=1),
+            )
+            fig.add_annotation(
+                x=2+i*1.5+0.6, y=layer["y"],
+                text=comp,
+                showarrow=False,
+                font=dict(size=10, color="white"),
+            )
+
+    fig.add_annotation(
+        x=3, y=0.6, ax=3, ay=1.4,
+        xref="x", yref="y", axref="x", ayref="y",
+        showarrow=True, arrowhead=2, arrowsize=1.5, arrowcolor="#238E54",
+    )
+
+    fig.update_layout(
+        title="系统架构图",
+        xaxis=dict(visible=False, range=[-0.5, 7]),
+        yaxis=dict(visible=False, range=[-0.6, 2.6]),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        height=300,
+        margin=dict(l=20, r=20, t=40, b=20),
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+```
+
+---
+
+## 十、演示流程建议
+
+### 10.1 演示脚本（5 分钟）
+
+```
+1. 开场（30秒）
+   - "这是 DormIoT-Twin，宿舍安全监控数字孪生系统"
+   - 展示整体界面，强调科技绿主题
+
+2. 正常运行展示（30秒）
+   - 展示 6 个房间的实时数据
+   - 指出迷你趋势线、功率数字
+   - "系统每秒采集一次数据，通过 MQTT 协议传输"
+
+3. 异常注入演示（60秒）
+   - 切换到"配置中心"
+   - 点击"热得快"按钮
+   - 返回监控页面，展示房间变红
+   - "看，房间 101 功率飙升，触发告警"
+
+4. AI 研判展示（60秒）
+   - 展示 AI Agent 工作台
+   - "AI 自动检测到异常，开始分析波形特征"
+   - 展示推理过程：波形分类 → 特征提取 → LLM 研判
+   - "AI 给出专业研判：疑似使用大功率电器"
+
+5. 技术亮点（60秒）
+   - 展示 MQTT 通信日志
+   - "我们使用 MQTT 协议，这是物联网标准协议"
+   - 展示波形图
+   - "波形合成不是随机数，有真实的物理特征"
+
+6. 总结（30秒）
+   - "系统实现了完整的物联网三层架构"
+   - "结合 AI 技术，实现智能安防研判"
+   - "纯 Python 实现，零外部依赖即可运行"
+```
+
+### 10.2 技术亮点话术
+
+**物理波形合成**：
+> "我们的波形合成不是简单的随机数，而是使用 NumPy 模拟真实电表数据特征。正常模式有昼夜节律正弦波，热得快模式有高频毛刺，微波炉模式有方波交替。"
+
+**MQTT 仿真层**：
+> "我们保留了 MQTT 协议的完整语义，包括 Topic 设计和通配符匹配。代码中的 Topic 格式与真实 MQTT 完全兼容，可以无缝迁移到真实环境。"
+
+**AI Agent 研判**：
+> "AI 研判不是简单的阈值判断，而是使用 LangChain 框架构建专业安防 Prompt，结合波形特征分析，给出专业的安全评估。"
+
+**数字孪生**：
+> "这是一个真正的数字孪生系统，实时反映物理宿舍的状态，并通过 AI 进行智能分析和预警。"
+
+---
+
+## 十一、验收标准
 
 ### 功能验收
 
@@ -614,6 +976,8 @@ LLM (DeepSeek-V4-Flash): "疑似热得快启动..."
 - [ ] AI Agent 工作台显示完整的感知→推理→研判链路
 - [ ] 手动触发 AI 研判功能正常
 - [ ] 波形图实时更新，带阈值参考线
+- [ ] 宿舍平面图正常显示房间状态
+- [ ] 一键演示场景可正常运行
 
 ### 视觉验收
 
@@ -631,3 +995,7 @@ LLM (DeepSeek-V4-Flash): "疑似热得快启动..."
 - [ ] PRD.md 与代码架构一致
 - [ ] README.md 无已删除文件的引用
 - [ ] 所有环境变量配置说明与 `.env.example` 一致
+
+---
+
+*最后更新：2026-06-05*

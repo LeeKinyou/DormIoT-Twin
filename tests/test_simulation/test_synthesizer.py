@@ -29,14 +29,20 @@ class TestWaveformSynthesizer:
         result = synth.get_next_tick()
         assert isinstance(result, dict)
 
-    def test_get_next_tick_contains_rooms_101_to_106(self):
-        """测试返回数据包含 101-106 六个房间"""
+    def test_get_next_tick_contains_all_rooms(self):
+        """测试返回数据包含所有配置的房间"""
         from dormiot.simulation.synthesizer import WaveformSynthesizer
+        from dormiot.config import settings
         synth = WaveformSynthesizer()
         synth.reset()
         result = synth.get_next_tick()
-        expected_rooms = ["101", "102", "103", "104", "105", "106"]
-        assert list(result.keys()) == expected_rooms
+        # 应该包含所有楼层的所有房间
+        expected_count = settings.building_floors * settings.rooms_per_floor
+        assert len(result) == expected_count
+        # 验证房间 ID 格式正确（如 101, 102, ..., 620）
+        for room_id in result.keys():
+            assert len(room_id) == 3
+            assert room_id[0] in [str(f) for f in range(1, settings.building_floors + 1)]
 
     def test_each_room_has_required_fields(self):
         """测试每个房间数据包含必要字段"""
